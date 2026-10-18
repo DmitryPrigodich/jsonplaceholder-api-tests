@@ -2,7 +2,6 @@ import pytest
 
 from api_testing.api import PostsApi
 from api_testing.assertions import (
-    assert_fields,
     assert_json,
     assert_model,
     assert_model_list,
@@ -40,18 +39,21 @@ def test_create_post(posts_api: PostsApi, post_payload: PostPayload) -> None:
 
     assert_status(response, 201)
     post = assert_model(response, Post)
-    assert post.id > 0
-    assert_fields(assert_json(response), post_payload.model_dump(by_alias=True))
+    assert post.user_id == post_payload.user_id
+    assert post.title == post_payload.title
+    assert post.body == post_payload.body
 
 
-@pytest.mark.parametrize("post_id", [1, 50, 100])
+@pytest.mark.parametrize("post_id", [pytest.param(1, marks=pytest.mark.smoke), 50, 100])
 def test_update_post(posts_api: PostsApi, post_payload: PostPayload, post_id: int) -> None:
     response = posts_api.update(post_id, post_payload)
 
     assert_status(response, 200)
     post = assert_model(response, Post)
     assert post.id == post_id
-    assert_fields(assert_json(response), post_payload.model_dump(by_alias=True))
+    assert post.user_id == post_payload.user_id
+    assert post.title == post_payload.title
+    assert post.body == post_payload.body
 
 
 @pytest.mark.parametrize("post_id", [1, 100])

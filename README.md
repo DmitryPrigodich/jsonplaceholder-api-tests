@@ -1,14 +1,16 @@
-# Автоматизированное API тестирование JSONPlaceholder
+# JSONPlaceholder API tests
 
-Проект для проверки Users, Posts и Comments публичного API
-[JSONPlaceholder](https://jsonplaceholder.typicode.com/guide/).
-Реализован на Python 3.11+, pytest, requests и Pydantic; отчёты формируются через pytest-html.
-HTTP-транспорт, методы API, схемы и проверки отделены от тестовых сценариев.
+Automated tests for Users, Posts and Comments in the public
+[JSONPlaceholder API](https://jsonplaceholder.typicode.com/guide/).
+Built with Python 3.11+, pytest, requests and Pydantic, with standalone pytest-html reports.
+HTTP transport, resource methods, response validation and test scenarios have separate responsibilities.
 
-## Быстрый запуск
+The [assignment brief](#assignment-brief) below is an English translation of the original task.
 
-Выполнять из корня проекта. Нужен установленный Python 3.11 или новее и доступ к интернету.
-Учётная запись и API-ключ не требуются.
+## Quick start
+
+Run commands from the project root. Python 3.11+ and internet access are required;
+no account or API key is needed.
 
 ### Windows PowerShell
 
@@ -19,10 +21,10 @@ py -3 -m venv .venv
 Start-Process .\reports\report.html
 ```
 
-Активация окружения не нужна: команды используют его интерпретатор напрямую.
-Если `py` отсутствует, первую команду можно выполнить как `python -m venv .venv`.
+Activation is optional because these commands use the environment's interpreter directly.
+If `py` is unavailable, use `python -m venv .venv` with Python 3.11+.
 
-### Linux и macOS
+### Linux and macOS
 
 ```bash
 python3 -m venv .venv
@@ -30,120 +32,122 @@ python3 -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-После запуска открыть `reports/report.html` в браузере.
-Это самостоятельный HTML-файл; отдельный сервер и Java не нужны.
+Open `reports/report.html` in a browser. It is a standalone file; no report server or Java is needed.
 
-## Выбор набора тестов
+## Select a test scope
 
-В командах ниже `python` означает интерпретатор `.venv`.
-В PowerShell без активации заменять его на `.\.venv\Scripts\python.exe`,
-в Linux/macOS — на `.venv/bin/python`.
+Below, `python` means the interpreter in `.venv`. Without activation, substitute
+`.\.venv\Scripts\python.exe` on Windows or `.venv/bin/python` on Linux/macOS.
 
-| Команда | Что запускается |
+| Command | Scope |
 | --- | --- |
-| `python -m pytest` | Все API-тесты и локальные проверки компонентов |
-| `python -m pytest -m smoke` | Короткая проверка основных операций: 6 тестов |
-| `python -m pytest -m full` | Все 30 API-тестов, включая негативные |
-| `python -m pytest -m negative` | Несуществующие ресурсы и некорректные payload |
-| `python -m pytest -m unit` | 40 локальных проверок без обращения к публичному API |
-| `python -m pytest -m "full and not contract"` | API-тесты без известных ограничений валидации |
-| `python -m pytest -m contract --runxfail` | Демонстрация 6 ошибок валидации как обычных падений |
-| `python -m pytest --collect-only -q` | Список тестов без выполнения запросов |
+| `python -m pytest` | All API and offline component tests |
+| `python -m pytest -m smoke` | Six checks: users, posts, create, update, comments and a missing user |
+| `python -m pytest -m full` | All API tests, including negative scenarios |
+| `python -m pytest -m negative` | Missing resources and invalid payloads |
+| `python -m pytest -m unit` | Offline component tests, including a local HTTP server |
+| `python -m pytest -m "full and not contract"` | API tests excluding the assumed validation contract |
+| `python -m pytest -m contract --runxfail` | Show deviations from the assumed contract as ordinary failures |
+| `python -m pytest --collect-only -q` | List tests without sending requests |
 
-`smoke` является подмножеством `full`. Маркеры зарегистрированы;
-опечатка в маркере теста приводит к ошибке благодаря `--strict-markers`.
+`smoke` is a subset of `full`. Only one parameter of each selected scenario is marked smoke;
+the other parameters still run in full. Markers are registered and `--strict-markers`
+rejects unknown markers attached to tests.
 
-## Результат проверки
+## Interpreting results
 
-Локальный прогон на Windows / Python 3.12.14 от 17 октября 2026 года:
+Verified locally on Windows with Python 3.12.6 on October 19, 2026:
 
-| Набор | Результат |
+| Scope | Result |
 | --- | --- |
-| API (`full`) | 24 passed, 6 xfailed |
-| Компоненты (`unit`) | 40 passed |
-| Всего | 70 тестов: 64 passed, 6 xfailed |
+| API (`full`) | 24 passed, 12 xfailed |
+| Components (`unit`) | 45 passed |
+| Total | 81 tests: 69 passed, 12 xfailed |
 
-Шесть `xfail` явно фиксируют известную особенность JSONPlaceholder:
-сервис принимает пустые и некорректные данные с HTTP 201 вместо ошибки валидации.
-Тесты сохраняют ожидаемый контракт HTTP 400/422, а не считают принятие неверных данных успехом.
-Только точно проверенное поведение классифицируется как известное ограничение;
-HTTP 5xx, сетевые ошибки и неожиданные тела ответов остаются падениями.
-Подробности и примеры: [известные ограничения](docs/KNOWN_LIMITATIONS.md).
+The negative payload tests assume that missing fields, wrong types, empty strings and
+nonpositive user IDs should be rejected with HTTP 400/422. **This is an explicit assumption
+for the assignment, not a documented JSONPlaceholder validation guarantee.**
 
-Повторный результат зависит от доступности внешнего сервиса.
-GitHub Actions также успешно проверен 18 октября 2026 года на Ubuntu с Python 3.11 и 3.12:
-для каждой версии прошли lint, форматирование, локальные и API-тесты.
-[Проверенный CI-прогон и отчёты](https://github.com/DmitryPrigodich/jsonplaceholder-api-tests/actions/runs/39070870099).
+JSONPlaceholder accepts these requests with HTTP 201. Twelve cases therefore use a narrow,
+strict `xfail`: only the verified acceptance-and-echo response is an expected failure.
+Network errors, HTTP 5xx and unexpected response bodies still fail normally. If the server
+starts rejecting a payload, `XPASS(strict)` fails the run so the expectation can be reviewed.
+See [known limitations](docs/KNOWN_LIMITATIONS.md) for the exact cases and reproduction steps.
 
-## Покрытие требований
+Writes are simulated and are not persisted. Tests inspect each operation's response;
+they do not attempt to retrieve a newly created post or expect a deleted post to disappear.
+Results also depend on the availability of the public service.
 
-| Сценарий | Тест |
+## Requirement coverage
+
+| Scenario | Test |
 | --- | --- |
 | `GET /users` | `test_get_users` |
-| `GET /users/{id}` | `test_get_user_by_id`, ID 1, 5, 10 |
-| `GET /users/9999` | `test_get_nonexistent_user`, также ID 0 и -1 |
+| `GET /users/{id}` | `test_get_user_by_id`, IDs 1, 5, 10 |
+| `GET /users/9999` | `test_get_nonexistent_user`, also IDs 0 and -1 |
 | `GET /posts` | `test_get_posts` |
 | `POST /posts` | `test_create_post` |
-| `PUT /posts/{id}` | `test_update_post`, ID 1, 50, 100 |
+| `PUT /posts/{id}` | `test_update_post`, IDs 1, 50, 100 |
 | `PATCH /posts/{id}` | `test_patch_post_preserves_other_fields` |
 | `DELETE /posts/{id}` | `test_delete_post` |
-| `GET /posts/{id}/comments` | `test_get_comments_for_post`, ID 1, 50, 100 |
-| Пропуск обязательных полей | `test_invalid_post_payload_is_rejected`, три отдельных случая |
-| Неверные типы данных | Тот же тест, `wrong-field-types` |
-| Пустой JSON и отсутствие тела | Тот же тест, `empty-object` / `empty-request-body` |
+| `GET /posts/{id}/comments` | `test_get_comments_for_post`, IDs 1, 50, 100 |
+| Missing required fields | `test_invalid_post_payload_is_rejected`, one case per field |
+| Wrong field types | The same test, one invalid field per case |
+| Empty strings and nonpositive user IDs | The same test, separate boundary cases |
+| Empty JSON and no request body | The same test, `empty-object` / `empty-request-body` |
 
-Дополнительно проверяются фильтрация постов по пользователю, отсутствующий пост,
-пустая коллекция комментариев несуществующего поста, уникальность ID в коллекциях
-и сохранение остальных полей при PATCH. Схема проверяется для каждого элемента полученного списка.
+Additional checks cover filtering posts by user, a missing post, an empty comments collection
+for a missing post, unique collection IDs and unchanged fields after PATCH.
+Every returned list item is validated against its response model.
 
-## Архитектура
+## Project structure
 
 ```text
 src/api_testing/
-    config.py       Настройки и их валидация
-    client.py       requests.Session, таймауты, retries и логирование
-    api.py          Методы UsersApi, PostsApi и CommentsApi
-    models.py       DTO запросов и схемы ответов Pydantic
-    assertions.py   Проверки HTTP, JSON, схем и полей
+    config.py       Settings, validation and environment overrides
+    client.py       HTTP session, timeouts, retries and logging
+    api.py          UsersApi, PostsApi and CommentsApi resource methods
+    models.py       Request DTOs and strict response schemas
+    assertions.py   Reusable HTTP, JSON, schema and field checks
 tests/
-    conftest.py     CLI-параметры, fixtures и завершение сессии
-    api/            Интеграционные сценарии
-    unit/           Локальные проверки компонентов
+    conftest.py     CLI options, fixtures and session cleanup
+    api/
+        test_*.py              API scenarios
+        payload_validation.py  JSONPlaceholder-specific expected-failure classification
+    unit/           Offline component checks
 docs/
     KNOWN_LIMITATIONS.md
-    INTERVIEW_GUIDE.md
 .github/workflows/tests.yml
 ```
 
-Тест вызывает метод ресурса, получает `Response` и проверяет статус, формат и бизнес-данные.
-API layer не содержит `assert` и не вызывает `raise_for_status()`, поэтому негативные тесты
-могут исследовать HTTP 4xx. Общие проверки вынесены в `assertions.py`.
+A test calls a resource method, receives a `requests.Response`, checks the status and schema,
+then checks scenario-specific values. API methods contain no assertions and do not call
+`raise_for_status()`, so tests can inspect error responses.
 
-Pydantic работает в строгом режиме: строка `"1"` не принимается за integer, а `true` — за ID.
-Ответ может содержать новые дополнительные поля, но обязательные поля и их типы проверяются.
-DTO сериализуются с именами API (`userId`, `postId`). В негативных тестах можно передать
-сырой словарь или `None`, чтобы неверные данные действительно дошли до сервера.
+Request DTOs accept Python field names such as `user_id` and serialize them as `userId`.
+Response models require API field names: `user_id` cannot replace `userId` in a server response.
+Types are strict (`"1"` and `true` are not integer IDs), while additional response fields are allowed.
+Raw dictionaries and `None` bypass DTO validation for negative requests.
 
-Сессия HTTP и объекты ресурсов создаются один раз на прогон; DTO тестовых данных — заново
-для каждого теста. Сессия закрывается при teardown, даже если тесты упали.
-Тесты не зависят от порядка запуска и не используют результаты других тестов.
+The HTTP session and resource objects are shared for one test run and closed during teardown.
+Payload fixtures create a fresh DTO for each test. Tests are independent of execution order.
 
-## Настройки
+## Configuration
 
-Приоритет: **CLI → переменные окружения → значения по умолчанию**.
+Precedence: **CLI options > environment variables > defaults**.
 
-| CLI | Переменная окружения | По умолчанию |
+| CLI option | Environment variable | Default |
 | --- | --- | --- |
 | `--base-url` | `API_BASE_URL` | `https://jsonplaceholder.typicode.com` |
-| `--connect-timeout` | `API_CONNECT_TIMEOUT` | 3.05 секунды |
-| `--read-timeout` | `API_READ_TIMEOUT` | 10 секунд |
-| `--retries` | `API_RETRIES` | 2 повтора |
+| `--connect-timeout` | `API_CONNECT_TIMEOUT` | 3.05 seconds |
+| `--read-timeout` | `API_READ_TIMEOUT` | 10 seconds |
+| `--retries` | `API_RETRIES` | 2 retries |
 
 ```bash
 python -m pytest -m smoke --base-url=https://jsonplaceholder.typicode.com --read-timeout=15 --retries=1
 ```
 
-Пример через окружение в PowerShell:
+Environment overrides in PowerShell:
 
 ```powershell
 $env:API_BASE_URL = "https://jsonplaceholder.typicode.com"
@@ -151,47 +155,35 @@ $env:API_READ_TIMEOUT = "15"
 .\.venv\Scripts\python.exe -m pytest -m smoke
 ```
 
-Поддерживаются URL с префиксом пути, например `https://host.example/api/v1`.
-Некорректные URL, нулевые/отрицательные/бесконечные таймауты и число повторов вне 0..5
-отклоняются до выполнения тестов. `.env` автоматически не загружается.
-Другой base URL должен предоставлять совместимые маршруты и тестовые данные.
+Base URLs may include a path prefix, such as `https://host.example/api/v1`.
+Invalid URLs, nonpositive or nonfinite timeouts, and retry counts outside 0..5 are rejected
+before tests run. `.env` files are not loaded automatically. Another base URL must provide
+compatible routes and test data.
 
-### Повторы и таймауты
+Retries apply to the HTTP transport, not failed assertions. GET/HEAD/OPTIONS may be retried
+after HTTP 429/500/502/503/504 or eligible read errors. Writes are not retried after an HTTP
+error or read error; connection failures before sending a request may be retried for any method.
+The retry budget is shared: `--retries=2` means at most three attempts. Backoff uses a factor
+of 0.3 and a three-second cap; `Retry-After` is disabled to avoid excessive server-directed waits.
+The final error response or network exception reaches the test. Redirects are not followed.
+Connect/read timeouts limit individual I/O stages, not the total duration including retries.
 
-- При HTTP 429/500/502/503/504 и ошибках чтения повторяются только GET/HEAD/OPTIONS.
-- POST/PUT/PATCH/DELETE не повторяются после HTTP-ошибки или ошибки чтения:
-  сервер мог уже обработать запись.
-- Ошибка установления соединения **до отправки запроса** может повторяться для любого метода.
-- Бюджет повторов общий: `--retries=2` означает максимум три попытки.
-- Между повторными ошибками применяется exponential backoff с коэффициентом 0.3 и пределом 3 секунды.
-  `Retry-After` отключён, чтобы не получить длительное ожидание от внешнего стенда.
-- Последний HTTP 5xx возвращается в тест и вызывает обычное падение проверки статуса.
-  Исключения сети и таймаутов также не скрываются.
+## Reports and logs
 
-Connect/read timeout ограничивают соответствующие этапы I/O, а не полное время теста:
-повторы и backoff могут увеличить общую длительность. Автоматического перезапуска упавших
-тестов нет: retries относятся только к транспорту. Перенаправления не выполняются автоматически.
+A normal run writes `reports/report.html` and `reports/test-run.log`.
+The log includes method, URL, status, elapsed time and retry count; request bodies and
+authorization headers are not logged. Assertion failures include response diagnostics.
 
-## Отчётность и логи
-
-Обычный запуск создаёт:
-
-- `reports/report.html` — самостоятельный HTML-отчёт со статусами и диагностикой тестов;
-- `reports/test-run.log` — метод и URL запроса, статус ответа, длительность и число повторов.
-
-В файл журнала не записываются тела запросов и заголовки авторизации.
-При ошибке проверки выводится диагностический фрагмент ответа.
-
-Отдельные артефакты для конкретного запуска:
+Use separate paths to keep artifacts from multiple runs:
 
 ```bash
 python -m pytest -m full --html=reports/api.html --log-file=reports/api.log --junitxml=reports/junit.xml
 ```
 
-Отчёты, логи, виртуальное окружение и кеши исключены из Git.
-Существующий файл отчёта/лога с тем же именем перезаписывается следующим запуском.
+Reports, logs, environments and caches are ignored by Git. Reusing a report or log path
+overwrites the previous file.
 
-## Проверка качества и CI
+## Quality checks and CI
 
 ```bash
 python -m ruff check .
@@ -199,18 +191,89 @@ python -m ruff format --check .
 python -m pytest -m unit
 ```
 
-GitHub Actions запускается на push, pull request и вручную.
-Для Python 3.11 и 3.12 выполняются установка зафиксированных зависимостей,
-lint, проверка форматирования, локальные тесты и полный API-набор.
-HTML, JUnit и логи сохраняются как артефакты на 14 дней, в том числе при падении тестов.
-Доступ workflow ограничен чтением репозитория; дополнительные секреты не требуются.
+GitHub Actions runs on push, pull request and manual dispatch for Python 3.11 and 3.12.
+It installs pinned dependencies, checks lint and formatting, then runs offline and full API tests.
+HTML reports and logs from both scopes, plus JUnit results from the API suite, are retained
+for 14 days, including failed runs. The workflow has read-only repository permissions and needs no secrets.
+[Earlier CI baseline and artifacts](https://github.com/DmitryPrigodich/jsonplaceholder-api-tests/actions/runs/39070870099)
+cover the version before the latest review changes.
 
-## Как добавить сценарий
+## Adding a scenario
 
-1. При необходимости добавить метод ресурса в `api.py` и модель в `models.py`.
-2. Переиспользовать существующую fixture или добавить новую для нового ресурса.
-3. Добавить тест в `tests/api/` с маркером `full`; короткую основную проверку также пометить `smoke`.
-4. Параметризовать однотипные случаи; общие проверки перенести в `assertions.py`.
-5. Запустить затронутый набор и проверки качества.
+1. Add a resource method in `api.py` and a model in `models.py` if needed.
+2. Reuse a fixture or introduce one for a new resource.
+3. Add a test under `tests/api/` with `full`; mark representative quick checks with `smoke`.
+4. Parametrize similar cases. Keep reusable protocol checks in `assertions.py` and
+   scenario-specific expectations with the tests.
+5. Run the affected tests and quality checks.
 
-Для разбора решений перед собеседованием: [пояснения к проекту](docs/INTERVIEW_GUIDE.md).
+## Assignment brief
+
+### API test automation assignment for a QA Engineer position
+
+Develop an automated API testing system using Python. You may use Python frameworks of your choice.
+
+Test environment: https://jsonplaceholder.typicode.com/guide/
+
+### Technical requirements
+
+- Python 3.11+
+- pytest
+- requests / httpx
+- pytest markers
+- Configurable base URL
+- Logging
+- HTML / Allure reporting
+
+### Architectural requirements
+
+The system must:
+
+- Support growth of the test suite.
+- Separate the API layer, assertions and test logic.
+- Avoid duplication.
+- Use reusable components.
+
+### Desirable features
+
+- API client abstraction
+- Models / DTOs
+- Fixtures
+- Parametrization
+- Negative scenarios
+- Retries / timeout handling
+- Schema validation (optional)
+
+A README is required.
+
+### Minimum required coverage
+
+Implement automated API tests for at least the following scenarios.
+
+#### Users
+
+1. Retrieve the list of users: `GET /users`.
+2. Retrieve a specific user by ID: `GET /users/{id}`.
+3. Check the response when requesting a nonexistent user: `GET /users/9999`.
+
+#### Posts
+
+4. Retrieve the list of posts: `GET /posts`.
+5. Create a new post: `POST /posts`.
+6. Update a post: `PUT /posts/{id}`.
+7. Partially update a post: `PATCH /posts/{id}`.
+8. Delete a post: `DELETE /posts/{id}`.
+
+#### Comments
+
+9. Retrieve comments for a specific post: `GET /posts/{id}/comments`.
+
+#### Negative scenarios
+
+10. Check the handling of an invalid payload, for example:
+    - Missing required fields.
+    - Incorrect data types.
+    - An empty request body.
+
+Tests must be divided into scopes (`@smoke`, `@full`, etc.). It must be possible to run
+tests by selecting a specific scope.

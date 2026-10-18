@@ -28,7 +28,7 @@ def test_get_user_by_id(users_api: UsersApi, user_id: int) -> None:
 
 
 @pytest.mark.negative
-@pytest.mark.parametrize("user_id", [9999, 0, -1])
+@pytest.mark.parametrize("user_id", [pytest.param(9999, marks=pytest.mark.smoke), 0, -1])
 def test_get_nonexistent_user(users_api: UsersApi, user_id: int) -> None:
     response = users_api.get(user_id)
 

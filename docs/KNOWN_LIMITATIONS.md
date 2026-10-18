@@ -1,27 +1,39 @@
-# Ограничения JSONPlaceholder
+# JSONPlaceholder limitations
 
-Поведение ниже проверено реальными запросами 17 октября 2026 года.
-Это особенности публичного учебного стенда, которые влияют на интерпретацию результатов.
+These characteristics of the public demo API affect how test results should be interpreted.
+The expanded negative cases below were verified with real requests on October 19, 2026.
 
-## JP-001 Сервер принимает некорректные данные нового поста
+## JP-001: Invalid post payloads are accepted
 
-Ожидаемый контракт для создания поста: непустые строковые `title` и `body`,
-положительный целочисленный `userId`. Отсутствующие поля или неверные типы
-должны приводить к HTTP 400/422. Этот контракт принят для негативных сценариев
-задания; JSONPlaceholder не документирует обязательную серверную валидацию этих полей.
+For this assignment, the negative tests assume that creating a post requires nonempty
+string `title` and `body` fields and a positive integer `userId`. Missing fields, incorrect
+types and invalid boundary values are expected to produce HTTP 400/422.
 
-Фактически `POST /posts` возвращает HTTP 201 и дополняет входные данные полем `id`:
+**This is an assumed validation contract, not a documented guarantee of JSONPlaceholder.**
+Acceptance of these inputs is a deviation from that assumption, not evidence that the
+demo service violates its own specification.
 
-| Входные данные | Фактический результат |
-| --- | --- |
-| `{"body":"Body","userId":1}` | 201, отсутствующий `title` не отклонён |
-| `{"title":"Title","userId":1}` | 201, отсутствующий `body` не отклонён |
-| `{"title":"Title","body":"Body"}` | 201, отсутствующий `userId` не отклонён |
-| `{"title":123,"body":false,"userId":"wrong"}` | 201, неверные типы возвращены без изменения |
-| `{}` | 201, ответ содержит только сгенерированный `id` |
-| Тело отсутствует, Content-Type: application/json | 201, ответ содержит только сгенерированный `id` |
+In practice, `POST /posts` responds with HTTP 201 and adds an `id` to the supplied data:
 
-Минимальный пример для воспроизведения:
+| Case | Payload | Observed response |
+| --- | --- | --- |
+| Missing title | `{"body":"Body","userId":1}` | 201; title remains absent |
+| Missing body | `{"title":"Title","userId":1}` | 201; body remains absent |
+| Missing user ID | `{"title":"Title","body":"Body"}` | 201; userId remains absent |
+| Wrong title type | `{"title":123,"body":"Body","userId":1}` | 201; numeric title is echoed |
+| Wrong body type | `{"title":"Title","body":false,"userId":1}` | 201; boolean body is echoed |
+| Wrong user ID type | `{"title":"Title","body":"Body","userId":"wrong"}` | 201; string userId is echoed |
+| Empty title | `{"title":"","body":"Body","userId":1}` | 201; empty title is echoed |
+| Empty body | `{"title":"Title","body":"","userId":1}` | 201; empty body is echoed |
+| Zero user ID | `{"title":"Title","body":"Body","userId":0}` | 201; zero userId is echoed |
+| Negative user ID | `{"title":"Title","body":"Body","userId":-1}` | 201; negative userId is echoed |
+| Empty JSON object | `{}` | 201; only a generated id is returned |
+| No request body | No bytes, with `Content-Type: application/json` | 201; only a generated id is returned |
+
+Each field-specific case changes one field while keeping the others valid, so rejection
+of one invalid field cannot be mistaken for validation of the others.
+
+### Minimal reproduction
 
 ```http
 POST /posts HTTP/1.1
@@ -31,7 +43,7 @@ Content-Type: application/json
 {}
 ```
 
-Наблюдаемый ответ:
+Observed response:
 
 ```http
 HTTP/1.1 201 Created
@@ -40,49 +52,54 @@ Content-Type: application/json; charset=utf-8
 {"id":101}
 ```
 
-### Как это отражено в тестах
+### How tests classify the result
 
-Шесть параметров `test_invalid_post_payload_is_rejected` помечены
+The twelve parameters of `test_invalid_post_payload_is_rejected` use
 `xfail(strict=True, raises=KnownPayloadValidationGap)`.
-Тест сначала проверяет фактический ответ HTTP 201: формат JSON,
-точное сохранение входных полей и их типов, набор полей и положительный integer ID.
-Только затем поднимается специальное исключение известного ограничения.
+The classification helper lives beside the API tests in
+`tests/api/payload_validation.py`, rather than in the reusable assertion layer.
 
-- Если сервер принимает неверный payload ровно таким способом, результат — `XFAIL`.
-- Если сервер недоступен, возвращает 5xx, HTML или неожиданное тело, результат — `FAIL`/`ERROR`.
-- Если сервер начнёт возвращать 400/422, тест станет `XPASS(strict)` и сборка упадёт:
-  маркер нужно пересмотреть, поскольку ограничение устранено.
+For HTTP 201, the helper verifies JSON content, unchanged input fields and types,
+the exact response field set, and a positive integer ID. Only that precise response
+raises `KnownPayloadValidationGap`.
 
-Таким образом, `xfail` не скрывает произвольные ошибки и не заменяет негативные проверки
-проверкой «201 — это нормально».
+- Verified acceptance and echo of invalid data produces `XFAIL`.
+- Network failures, HTTP 5xx, HTML, malformed JSON and unexpected bodies produce `FAIL`/`ERROR`.
+- HTTP 400/422 satisfies the assumed contract, producing `XPASS(strict)` and a failing run.
+  Review the changed behavior and remove or narrow the marker as appropriate.
 
-Чтобы увидеть отсутствие валидации как обычные падения:
+This avoids hiding arbitrary failures behind `xfail`. To display the deviations as ordinary failures:
 
 ```bash
 python -m pytest -m contract --runxfail
 ```
 
-Ожидается ненулевой exit code и шесть падений на текущем стенде.
+On the current service, expect twelve failures and a nonzero exit code.
+This command demonstrates the difference between observed behavior and the assignment's
+assumed contract; it does not establish twelve bugs in JSONPlaceholder.
 
-## JP-002 Изменения не сохраняются
+## JP-002: Writes are not persisted
 
-Создание, PUT, PATCH и DELETE имитируют операции, но не изменяют постоянные данные.
-Это прямо описано в [официальном руководстве](https://jsonplaceholder.typicode.com/guide/).
+Create, PUT, PATCH and DELETE simulate writes without changing persistent data.
+This is documented in the [official guide](https://jsonplaceholder.typicode.com/guide/).
 
-Поэтому тесты проверяют непосредственный ответ записи и не строят зависимую цепочку
-«создать → прочитать созданное → изменить → удалить».
-После DELETE не ожидается 404 от следующего GET, а после POST не запрашивается созданный ID.
-Очистка созданных постов не нужна, поскольку они фактически не сохраняются.
-PATCH проверяет исходные поля через отдельный GET существующего поста перед изменением.
+Tests check each write response independently instead of building a dependent
+create/read/update/delete chain. They do not fetch a newly created ID or expect GET to return
+404 after DELETE. Cleanup is unnecessary because the writes are not persisted.
+The PATCH test reads an existing post first to check that other fields are preserved in the response.
 
-## JP-003 Публичный стенд и фиксированные данные
+For an API with persistent storage, the approach would need unique test data, read-back
+verification and cleanup in a yield fixture or finalizer, including after test failures.
 
-API-тесты требуют интернет и совместимый набор данных: пользователей 1, 5, 10,
-посты 1, 50, 100 и их комментарии. Коллекции проверяются по схемам, связям и уникальности ID,
-без жёсткой привязки к полным текстам постов или точному размеру всех списков.
+## JP-003: Public service and fixed test data
 
-HTTP 404 отсутствующего пользователя/поста и HTTP 200 с пустой коллекцией комментариев
-несуществующего поста проверяются отдельно: это разные сценарии.
+API tests require internet access and compatible data: users 1, 5 and 10; posts 1, 50 and 100;
+and their comments. Collections are checked for schemas, relationships and unique IDs
+without relying on exact post text or the precise size of every collection.
 
-Смена base URL меняет адрес запросов, но не превращает тесты в универсальный набор
-для произвольного API. Локальные тесты компонентов (`-m unit`) не обращаются к публичному стенду.
+A missing user/post returns HTTP 404. The comments collection for a missing post returns
+HTTP 200 with an empty array. These are distinct scenarios with separate tests.
+
+Changing the base URL changes request destinations, not the API contract or data expectations.
+Offline component tests (`-m unit`) do not contact the public service; transport tests use
+a temporary local HTTP server.

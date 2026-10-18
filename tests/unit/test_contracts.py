@@ -4,13 +4,9 @@ import pytest
 from pydantic import ValidationError
 from requests import Request, Response
 
-from api_testing.assertions import (
-    KnownPayloadValidationGap,
-    assert_fields,
-    assert_invalid_payload_rejected,
-    assert_model,
-)
-from api_testing.models import Post
+from api_testing.assertions import assert_fields, assert_model
+from api_testing.models import Comment, Company, Post, PostPayload
+from tests.api.payload_validation import KnownPayloadValidationGap, assert_invalid_payload_rejected
 
 pytestmark = pytest.mark.unit
 
@@ -29,6 +25,62 @@ def make_response(status: int, data: object, content_type: str = "application/js
 def test_response_model_does_not_coerce_invalid_types(invalid_id) -> None:
     with pytest.raises(ValidationError):
         Post.model_validate({"id": invalid_id, "userId": 1, "title": "Title", "body": "Body"})
+
+
+@pytest.mark.parametrize(
+    ("model", "payload", "api_name", "python_name"),
+    [
+        pytest.param(
+            Post,
+            {"id": 1, "userId": 1, "title": "Title", "body": "Body"},
+            "userId",
+            "user_id",
+            id="post-user-id",
+        ),
+        pytest.param(
+            Comment,
+            {"id": 1, "postId": 1, "name": "Name", "email": "a@example.com", "body": "Body"},
+            "postId",
+            "post_id",
+            id="comment-post-id",
+        ),
+        pytest.param(
+            Company,
+            {"name": "Company", "catchPhrase": "Phrase", "bs": "Business"},
+            "catchPhrase",
+            "catch_phrase",
+            id="company-catch-phrase",
+        ),
+    ],
+)
+def test_response_models_require_api_field_names(model, payload, api_name, python_name) -> None:
+    parsed = model.model_validate(payload)
+    assert getattr(parsed, python_name) == payload[api_name]
+
+    invalid_payload = {**payload, python_name: payload[api_name]}
+    del invalid_payload[api_name]
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(invalid_payload)
+
+    assert any(
+        detail["loc"] == (api_name,) and detail["type"] == "missing"
+        for detail in error.value.errors()
+    )
+
+
+def test_request_dto_accepts_python_names_and_serializes_api_names() -> None:
+    payload = PostPayload(user_id=1, title="Title", body="Body")
+
+    assert payload.model_dump(by_alias=True) == {"userId": 1, "title": "Title", "body": "Body"}
+
+
+def test_response_model_allows_additional_api_fields() -> None:
+    post = Post.model_validate(
+        {"id": 1, "userId": 1, "title": "Title", "body": "Body", "newField": "value"}
+    )
+
+    assert post.id == 1
+    assert post.user_id == 1
 
 
 def test_field_assertion_distinguishes_boolean_from_integer() -> None:

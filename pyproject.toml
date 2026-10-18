@@ -29,7 +29,7 @@ markers = [
     "smoke: quick checks of core read and write operations (also included in full)",
     "full: all integration tests against the configured API",
     "negative: invalid input and missing resource scenarios",
-    "contract: desired validation behavior with documented API limitations",
+    "contract: assumed validation behavior with documented JSONPlaceholder deviations",
     "unit: offline tests of framework behavior",
 ]
 log_cli = false
@@ -47,3 +47,6 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tests"]

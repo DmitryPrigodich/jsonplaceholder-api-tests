@@ -7,8 +7,7 @@ from api_testing.models import Comment
 pytestmark = pytest.mark.full
 
 
-@pytest.mark.smoke
-@pytest.mark.parametrize("post_id", [1, 50, 100])
+@pytest.mark.parametrize("post_id", [pytest.param(1, marks=pytest.mark.smoke), 50, 100])
 def test_get_comments_for_post(comments_api: CommentsApi, post_id: int) -> None:
     response = comments_api.for_post(post_id)
 

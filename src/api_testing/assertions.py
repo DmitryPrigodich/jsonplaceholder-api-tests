@@ -63,23 +63,3 @@ def assert_fields(actual: dict[str, Any], expected: dict[str, Any]) -> None:
             f"Field {key!r}: expected {value!r} ({type(value).__name__}), "
             f"got {actual[key]!r} ({type(actual[key]).__name__})"
         )
-
-
-class KnownPayloadValidationGap(AssertionError):
-    """Only the verified JSONPlaceholder validation gap is an expected failure."""
-
-
-def assert_invalid_payload_rejected(response: Response, payload: dict[str, Any] | None) -> None:
-    if response.status_code == 201:
-        # Verify the precise known behavior before classifying it as a known limitation.
-        # Transport errors, 5xx, HTML, malformed JSON and unexpected bodies must fail normally.
-        data = assert_json(response)
-        expected = payload or {}
-        assert_fields(data, expected)
-        assert set(data) == set(expected) | {"id"}, f"Unexpected response fields: {data!r}"
-        assert type(data["id"]) is int and data["id"] > 0, f"Invalid generated ID: {data!r}"
-        raise KnownPayloadValidationGap(
-            "Invalid payload was accepted and echoed with HTTP 201; expected HTTP 400 or 422. "
-            f"Payload: {payload!r}. {response_details(response)}"
-        )
-    assert_status(response, (400, 422))

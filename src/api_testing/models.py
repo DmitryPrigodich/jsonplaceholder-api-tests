@@ -3,17 +3,24 @@
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
 
-class ApiModel(BaseModel):
-    # Additive API fields are allowed; required fields and their types remain strict.
-    model_config = ConfigDict(strict=True, populate_by_name=True, extra="ignore")
+class ResponseModel(BaseModel):
+    model_config = ConfigDict(
+        strict=True, validate_by_alias=True, validate_by_name=False, extra="ignore"
+    )
 
 
-class Geo(ApiModel):
+class RequestModel(BaseModel):
+    model_config = ConfigDict(
+        strict=True, validate_by_alias=True, validate_by_name=True, extra="ignore"
+    )
+
+
+class Geo(ResponseModel):
     lat: str
     lng: str
 
 
-class Address(ApiModel):
+class Address(ResponseModel):
     street: str
     suite: str
     city: str
@@ -21,13 +28,13 @@ class Address(ApiModel):
     geo: Geo
 
 
-class Company(ApiModel):
+class Company(ResponseModel):
     name: str
     catch_phrase: str = Field(alias="catchPhrase")
     bs: str
 
 
-class User(ApiModel):
+class User(ResponseModel):
     id: PositiveInt
     name: str
     username: str
@@ -38,24 +45,24 @@ class User(ApiModel):
     company: Company
 
 
-class PostPayload(ApiModel):
+class PostPayload(RequestModel):
     user_id: PositiveInt = Field(alias="userId")
     title: str = Field(min_length=1)
     body: str = Field(min_length=1)
 
 
-class Post(ApiModel):
+class Post(ResponseModel):
     id: PositiveInt
     user_id: PositiveInt = Field(alias="userId")
     title: str
     body: str
 
 
-class PostPatch(ApiModel):
+class PostPatch(RequestModel):
     title: str = Field(min_length=1)
 
 
-class Comment(ApiModel):
+class Comment(ResponseModel):
     post_id: PositiveInt = Field(alias="postId")
     id: PositiveInt
     name: str
