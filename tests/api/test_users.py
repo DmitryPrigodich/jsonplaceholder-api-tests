@@ -9,6 +9,8 @@ pytestmark = [pytest.mark.full, pytest.mark.users]
 
 @pytest.mark.smoke
 def test_get_users(users_api: UsersApi) -> None:
+    """The user list is returned, matches the schema and has unique IDs."""
+
     response = users_api.list()
 
     assert_status(response, 200)
@@ -20,6 +22,8 @@ def test_get_users(users_api: UsersApi) -> None:
 
 @pytest.mark.parametrize("user_id", [1, 5, 10])
 def test_get_user_by_id(users_api: UsersApi, user_id: int) -> None:
+    """A single user is returned by ID and matches the schema."""
+
     response = users_api.get(user_id)
 
     assert_status(response, 200)
@@ -30,6 +34,8 @@ def test_get_user_by_id(users_api: UsersApi, user_id: int) -> None:
 @pytest.mark.negative
 @pytest.mark.parametrize("user_id", [pytest.param(9999, marks=pytest.mark.smoke), 0, -1, "abc"])
 def test_get_nonexistent_user(users_api: UsersApi, user_id: int | str) -> None:
+    """A missing or invalid user ID returns HTTP 404 with an empty object."""
+
     response = users_api.get(user_id)
 
     assert_status(response, 404)

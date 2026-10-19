@@ -1,6 +1,8 @@
 """Shared test setup and pytest CLI configuration."""
 
+import inspect
 from collections.abc import Iterator
+from html import escape
 
 import pytest
 from pydantic import ValidationError
@@ -39,6 +41,25 @@ def pytest_report_header(config: pytest.Config) -> str:
         f"API: {settings.base_url}; connect/read timeout: {settings.timeout}s; "
         f"retries: {settings.retries}"
     )
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]):
+    report = yield
+    # The first docstring line describes the scenario in plain language for the HTML report.
+    doc = inspect.getdoc(getattr(item, "function", None)) or ""
+    report.description = doc.splitlines()[0] if doc else ""
+    return report
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_html_results_table_header(cells: list[str]) -> None:
+    cells.insert(2, "<th>Description</th>")
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_html_results_table_row(report: pytest.TestReport, cells: list[str]) -> None:
+    cells.insert(2, f"<td>{escape(getattr(report, 'description', ''))}</td>")
 
 
 @pytest.fixture(scope="session")

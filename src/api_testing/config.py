@@ -1,16 +1,15 @@
-"""Validated configuration; CLI values take precedence over environment variables."""
+"""Test run settings. Priority: CLI options > environment variables > defaults."""
 
 from __future__ import annotations
 
 import os
 from typing import Any
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Settings(BaseModel):
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
+    model_config = ConfigDict(frozen=True)
 
     base_url: str = "https://jsonplaceholder.typicode.com"
     connect_timeout: float = Field(default=3.05, gt=0)
@@ -20,17 +19,9 @@ class Settings(BaseModel):
     @field_validator("base_url")
     @classmethod
     def validate_base_url(cls, value: str) -> str:
-        value = value.strip().rstrip("/")
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ValueError("base URL must be an absolute http(s) URL")
-        # Accessing port also detects malformed ports early.
-        _ = parsed.port
-        if parsed.username is not None or parsed.password is not None:
-            raise ValueError("base URL must not contain credentials")
-        if parsed.query or parsed.fragment:
-            raise ValueError("base URL must not contain a query or fragment")
-        return value
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("base URL must start with http:// or https://")
+        return value.rstrip("/")
 
     @property
     def timeout(self) -> tuple[float, float]:

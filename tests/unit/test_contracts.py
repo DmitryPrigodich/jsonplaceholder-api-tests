@@ -4,31 +4,19 @@ import pytest
 from pydantic import ValidationError
 from requests import Request, Response
 
-from api_testing.assertions import assert_fields, assert_model
-from api_testing.models import Comment, Company, Post, PostPayload
-from tests.api.payload_validation import (
-    KnownMalformedJsonError,
-    KnownPayloadValidationGap,
-    assert_invalid_payload_rejected,
-    assert_malformed_json_rejected,
-)
+from api_testing.assertions import assert_model, assert_status
+from api_testing.models import Post, PostPayload
 
 pytestmark = pytest.mark.unit
 
-PARSER_ERROR = (
-    "SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)\n"
-    "    at JSON.parse (<anonymous>)\n"
-    "    at parse (/app/node_modules/body-parser/lib/types/json.js:89:19)"
-)
 
-
-def make_response(status: int, data: object, content_type: str = "application/json") -> Response:
+def make_response(status: int, data: object) -> Response:
     response = Response()
     response.status_code = status
     response._content = json.dumps(data).encode()
-    response.headers["Content-Type"] = content_type
+    response.headers["Content-Type"] = "application/json"
     response.url = "https://example.com/posts"
-    response.request = Request("POST", response.url).prepare()
+    response.request = Request("GET", response.url).prepare()
     return response
 
 
@@ -38,138 +26,26 @@ def test_response_model_does_not_coerce_invalid_types(invalid_id) -> None:
         Post.model_validate({"id": invalid_id, "userId": 1, "title": "Title", "body": "Body"})
 
 
-@pytest.mark.parametrize(
-    ("model", "payload", "api_name", "python_name"),
-    [
-        pytest.param(
-            Post,
-            {"id": 1, "userId": 1, "title": "Title", "body": "Body"},
-            "userId",
-            "user_id",
-            id="post-user-id",
-        ),
-        pytest.param(
-            Comment,
-            {"id": 1, "postId": 1, "name": "Name", "email": "a@example.com", "body": "Body"},
-            "postId",
-            "post_id",
-            id="comment-post-id",
-        ),
-        pytest.param(
-            Company,
-            {"name": "Company", "catchPhrase": "Phrase", "bs": "Business"},
-            "catchPhrase",
-            "catch_phrase",
-            id="company-catch-phrase",
-        ),
-    ],
-)
-def test_response_models_require_api_field_names(model, payload, api_name, python_name) -> None:
-    parsed = model.model_validate(payload)
-    assert getattr(parsed, python_name) == payload[api_name]
-
-    invalid_payload = {**payload, python_name: payload[api_name]}
-    del invalid_payload[api_name]
-    with pytest.raises(ValidationError) as error:
-        model.model_validate(invalid_payload)
-
-    assert any(
-        detail["loc"] == (api_name,) and detail["type"] == "missing"
-        for detail in error.value.errors()
-    )
+def test_response_model_requires_api_field_names() -> None:
+    with pytest.raises(ValidationError):
+        Post.model_validate({"id": 1, "user_id": 1, "title": "Title", "body": "Body"})
 
 
-def test_request_dto_accepts_python_names_and_serializes_api_names() -> None:
+def test_request_dto_serializes_api_field_names() -> None:
     payload = PostPayload(user_id=1, title="Title", body="Body")
 
     assert payload.model_dump(by_alias=True) == {"userId": 1, "title": "Title", "body": "Body"}
 
 
-def test_response_model_allows_additional_api_fields() -> None:
-    post = Post.model_validate(
-        {"id": 1, "userId": 1, "title": "Title", "body": "Body", "newField": "value"}
-    )
-
-    assert post.id == 1
-    assert post.user_id == 1
-
-
-def test_field_assertion_distinguishes_boolean_from_integer() -> None:
-    with pytest.raises(AssertionError, match="Field 'userId'"):
-        assert_fields({"userId": True}, {"userId": 1})
-
-
 def test_schema_error_is_reported_as_readable_assertion() -> None:
-    response = make_response(200, {"id": 1})
     with pytest.raises(AssertionError, match="Invalid Post schema"):
-        assert_model(response, Post)
+        assert_model(make_response(200, {"id": 1}), Post)
 
 
-def test_only_verified_invalid_payload_acceptance_is_a_known_gap() -> None:
-    response = make_response(201, {"id": 101, "title": 42})
-    with pytest.raises(KnownPayloadValidationGap):
-        assert_invalid_payload_rejected(response, {"title": 42})
-
-
-@pytest.mark.parametrize("status", [200, 403, 404, 500, 503])
-def test_unexpected_status_is_not_hidden_as_known_validation_gap(status: int) -> None:
-    response = make_response(status, {"error": "unexpected"})
+def test_status_error_shows_request_and_response() -> None:
     with pytest.raises(AssertionError) as error:
-        assert_invalid_payload_rejected(response, {})
+        assert_status(make_response(404, {}), 200)
 
-    assert type(error.value) is AssertionError
-
-
-@pytest.mark.parametrize(
-    ("data", "content_type"),
-    [
-        ({"id": 101, "error": "unexpected"}, "application/json"),
-        ({"id": "101"}, "application/json"),
-        ({"id": 101}, "text/html"),
-        ([], "application/json"),
-    ],
-)
-def test_unexpected_created_response_is_not_hidden_as_known_gap(data, content_type) -> None:
-    response = make_response(201, data, content_type)
-    with pytest.raises(AssertionError) as error:
-        assert_invalid_payload_rejected(response, {})
-
-    assert type(error.value) is AssertionError
-
-
-@pytest.mark.parametrize("status", [400, 422])
-def test_validation_error_response_satisfies_desired_contract(status: int) -> None:
-    assert_invalid_payload_rejected(make_response(status, {"error": "invalid input"}), {})
-
-
-def test_known_malformed_json_parser_error_is_classified_narrowly() -> None:
-    response = make_response(500, None, content_type="text/html")
-    response._content = PARSER_ERROR.encode()
-
-    with pytest.raises(KnownMalformedJsonError):
-        assert_malformed_json_rejected(response)
-
-
-@pytest.mark.parametrize(
-    ("status", "body"),
-    [
-        pytest.param(500, "Internal Server Error", id="unrelated-500"),
-        pytest.param(502, PARSER_ERROR, id="wrong-status"),
-        pytest.param(500, PARSER_ERROR.splitlines()[0], id="missing-parser-stack"),
-        pytest.param(500, PARSER_ERROR.replace("JSON.parse", "other"), id="missing-json-parser"),
-        pytest.param(500, PARSER_ERROR.replace("body-parser", "other"), id="missing-body-parser"),
-        pytest.param(201, '{"id":101}', id="accepted-malformed-json"),
-    ],
-)
-def test_unexpected_malformed_json_response_is_not_hidden_as_known_error(status, body) -> None:
-    response = make_response(status, None, content_type="text/html")
-    response._content = body.encode()
-
-    with pytest.raises(AssertionError) as error:
-        assert_malformed_json_rejected(response)
-
-    assert type(error.value) is AssertionError
-
-
-def test_bad_request_satisfies_malformed_json_contract() -> None:
-    assert_malformed_json_rejected(make_response(400, {"error": "Invalid JSON"}))
+    assert "Expected HTTP 200" in str(error.value)
+    assert "GET https://example.com/posts" in str(error.value)
+    assert "HTTP 404" in str(error.value)

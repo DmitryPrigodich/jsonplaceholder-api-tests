@@ -14,6 +14,8 @@ pytestmark = [pytest.mark.full, pytest.mark.posts]
 
 @pytest.mark.smoke
 def test_get_posts(posts_api: PostsApi) -> None:
+    """The post list is returned, matches the schema and has unique IDs."""
+
     response = posts_api.list()
 
     assert_status(response, 200)
@@ -25,6 +27,8 @@ def test_get_posts(posts_api: PostsApi) -> None:
 
 @pytest.mark.parametrize("user_id", [1, 5, 10])
 def test_filter_posts_by_user(posts_api: PostsApi, user_id: int) -> None:
+    """Filtering by userId returns only that user's posts."""
+
     response = posts_api.list(user_id=user_id)
 
     assert_status(response, 200)
@@ -43,6 +47,8 @@ def test_filter_posts_by_user(posts_api: PostsApi, user_id: int) -> None:
     ],
 )
 def test_create_post(posts_api: PostsApi, title: str, body: str) -> None:
+    """A new post is created and the response echoes the submitted fields."""
+
     post_payload = PostPayload(user_id=1, title=title, body=body)
 
     response = posts_api.create(post_payload)
@@ -56,6 +62,8 @@ def test_create_post(posts_api: PostsApi, title: str, body: str) -> None:
 
 @pytest.mark.parametrize("post_id", [pytest.param(1, marks=pytest.mark.smoke), 50, 100])
 def test_update_post(posts_api: PostsApi, post_payload: PostPayload, post_id: int) -> None:
+    """PUT replaces a post and the response contains the submitted fields."""
+
     response = posts_api.update(post_id, post_payload)
 
     assert_status(response, 200)
@@ -78,6 +86,8 @@ def test_update_post(posts_api: PostsApi, post_payload: PostPayload, post_id: in
 def test_patch_post_preserves_other_fields(
     posts_api: PostsApi, post_id: int, patch: dict[str, str | int]
 ) -> None:
+    """PATCH changes only the submitted field and keeps the rest."""
+
     original_response = posts_api.get(post_id)
     assert_status(original_response, 200)
     original = assert_model(original_response, Post)
@@ -92,6 +102,8 @@ def test_patch_post_preserves_other_fields(
 
 @pytest.mark.parametrize("post_id", [1, 100])
 def test_delete_post(posts_api: PostsApi, post_id: int) -> None:
+    """Deleting a post returns HTTP 200 with an empty object."""
+
     response = posts_api.delete(post_id)
 
     assert_status(response, 200)
@@ -100,6 +112,8 @@ def test_delete_post(posts_api: PostsApi, post_id: int) -> None:
 
 @pytest.mark.negative
 def test_get_nonexistent_post(posts_api: PostsApi) -> None:
+    """A missing post returns HTTP 404 with an empty object."""
+
     response = posts_api.get(9999)
 
     assert_status(response, 404)

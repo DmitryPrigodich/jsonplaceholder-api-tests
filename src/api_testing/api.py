@@ -19,10 +19,14 @@ def serialize(payload: Payload) -> dict[str, Any] | None:
     return payload
 
 
-class UsersApi:
+class Resource:
+    """Base for resource clients: a new resource only declares its endpoints."""
+
     def __init__(self, client: ApiClient) -> None:
         self.client = client
 
+
+class UsersApi(Resource):
     def list(self) -> Response:
         return self.client.request("GET", "/users")
 
@@ -30,10 +34,7 @@ class UsersApi:
         return self.client.request("GET", f"/users/{user_id}")
 
 
-class PostsApi:
-    def __init__(self, client: ApiClient) -> None:
-        self.client = client
-
+class PostsApi(Resource):
     def list(self, *, user_id: int | None = None) -> Response:
         params = {"userId": user_id} if user_id is not None else None
         return self.client.request("GET", "/posts", params=params)
@@ -58,9 +59,6 @@ class PostsApi:
         return self.client.request("DELETE", f"/posts/{post_id}")
 
 
-class CommentsApi:
-    def __init__(self, client: ApiClient) -> None:
-        self.client = client
-
+class CommentsApi(Resource):
     def for_post(self, post_id: int) -> Response:
         return self.client.request("GET", f"/posts/{post_id}/comments")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -9,18 +10,32 @@ from requests import Response
 
 Model = TypeVar("Model", bound=BaseModel)
 
+MAX_BODY_CHARS = 1000
+
+
+def format_body(response: Response) -> str:
+    """Pretty-print JSON so a failure can be read without pasting it into a formatter."""
+    try:
+        text = json.dumps(response.json(), indent=2, ensure_ascii=False)
+    except ValueError:
+        text = response.text
+    if len(text) > MAX_BODY_CHARS:
+        text = f"{text[:MAX_BODY_CHARS]}\n... ({len(text) - MAX_BODY_CHARS} more characters)"
+    return text or "<empty body>"
+
 
 def response_details(response: Response) -> str:
     return (
-        f"{response.request.method} {response.url}\n"
-        f"status={response.status_code}, body={response.text[:1000]!r}"
+        f"\nRequest:  {response.request.method} {response.url}\n"
+        f"Response: HTTP {response.status_code}\n"
+        f"Body:\n{format_body(response)}"
     )
 
 
 def assert_status(response: Response, expected: int | tuple[int, ...]) -> None:
     statuses = (expected,) if isinstance(expected, int) else expected
     assert response.status_code in statuses, (
-        f"Expected HTTP {statuses}; {response_details(response)}"
+        f"Expected HTTP {' or '.join(map(str, statuses))}; {response_details(response)}"
     )
 
 
