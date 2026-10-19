@@ -26,7 +26,7 @@ class UsersApi:
     def list(self) -> Response:
         return self.client.request("GET", "/users")
 
-    def get(self, user_id: int) -> Response:
+    def get(self, user_id: int | str) -> Response:
         return self.client.request("GET", f"/users/{user_id}")
 
 
@@ -43,6 +43,10 @@ class PostsApi:
 
     def create(self, payload: Payload = None) -> Response:
         return self.client.request("POST", "/posts", json=serialize(payload))
+
+    def create_raw(self, body: str | bytes) -> Response:
+        """Send a JSON request body without encoding it, including malformed JSON."""
+        return self.client.request("POST", "/posts", data=body)
 
     def update(self, post_id: int, payload: Payload) -> Response:
         return self.client.request("PUT", f"/posts/{post_id}", json=serialize(payload))

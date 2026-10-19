@@ -4,7 +4,7 @@ from api_testing.api import UsersApi
 from api_testing.assertions import assert_json, assert_model, assert_model_list, assert_status
 from api_testing.models import User
 
-pytestmark = pytest.mark.full
+pytestmark = [pytest.mark.full, pytest.mark.users]
 
 
 @pytest.mark.smoke
@@ -28,8 +28,8 @@ def test_get_user_by_id(users_api: UsersApi, user_id: int) -> None:
 
 
 @pytest.mark.negative
-@pytest.mark.parametrize("user_id", [pytest.param(9999, marks=pytest.mark.smoke), 0, -1])
-def test_get_nonexistent_user(users_api: UsersApi, user_id: int) -> None:
+@pytest.mark.parametrize("user_id", [pytest.param(9999, marks=pytest.mark.smoke), 0, -1, "abc"])
+def test_get_nonexistent_user(users_api: UsersApi, user_id: int | str) -> None:
     response = users_api.get(user_id)
 
     assert_status(response, 404)

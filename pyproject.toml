@@ -31,6 +31,9 @@ markers = [
     "negative: invalid input and missing resource scenarios",
     "contract: assumed validation behavior with documented JSONPlaceholder deviations",
     "unit: offline tests of framework behavior",
+    "users: user resource scenarios",
+    "posts: post resource scenarios, including invalid payloads",
+    "comments: comments for a post",
 ]
 log_cli = false
 log_level = "INFO"

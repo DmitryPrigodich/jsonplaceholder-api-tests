@@ -6,9 +6,20 @@ from requests import Request, Response
 
 from api_testing.assertions import assert_fields, assert_model
 from api_testing.models import Comment, Company, Post, PostPayload
-from tests.api.payload_validation import KnownPayloadValidationGap, assert_invalid_payload_rejected
+from tests.api.payload_validation import (
+    KnownMalformedJsonError,
+    KnownPayloadValidationGap,
+    assert_invalid_payload_rejected,
+    assert_malformed_json_rejected,
+)
 
 pytestmark = pytest.mark.unit
+
+PARSER_ERROR = (
+    "SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)\n"
+    "    at JSON.parse (<anonymous>)\n"
+    "    at parse (/app/node_modules/body-parser/lib/types/json.js:89:19)"
+)
 
 
 def make_response(status: int, data: object, content_type: str = "application/json") -> Response:
@@ -129,3 +140,36 @@ def test_unexpected_created_response_is_not_hidden_as_known_gap(data, content_ty
 @pytest.mark.parametrize("status", [400, 422])
 def test_validation_error_response_satisfies_desired_contract(status: int) -> None:
     assert_invalid_payload_rejected(make_response(status, {"error": "invalid input"}), {})
+
+
+def test_known_malformed_json_parser_error_is_classified_narrowly() -> None:
+    response = make_response(500, None, content_type="text/html")
+    response._content = PARSER_ERROR.encode()
+
+    with pytest.raises(KnownMalformedJsonError):
+        assert_malformed_json_rejected(response)
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        pytest.param(500, "Internal Server Error", id="unrelated-500"),
+        pytest.param(502, PARSER_ERROR, id="wrong-status"),
+        pytest.param(500, PARSER_ERROR.splitlines()[0], id="missing-parser-stack"),
+        pytest.param(500, PARSER_ERROR.replace("JSON.parse", "other"), id="missing-json-parser"),
+        pytest.param(500, PARSER_ERROR.replace("body-parser", "other"), id="missing-body-parser"),
+        pytest.param(201, '{"id":101}', id="accepted-malformed-json"),
+    ],
+)
+def test_unexpected_malformed_json_response_is_not_hidden_as_known_error(status, body) -> None:
+    response = make_response(status, None, content_type="text/html")
+    response._content = body.encode()
+
+    with pytest.raises(AssertionError) as error:
+        assert_malformed_json_rejected(response)
+
+    assert type(error.value) is AssertionError
+
+
+def test_bad_request_satisfies_malformed_json_contract() -> None:
+    assert_malformed_json_rejected(make_response(400, {"error": "Invalid JSON"}))

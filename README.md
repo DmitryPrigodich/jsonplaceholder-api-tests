@@ -1,11 +1,82 @@
 # JSONPlaceholder API tests
 
+## Assignment brief
+
+### API test automation assignment for a QA Engineer position
+
+Develop an automated API testing system using Python. You may use Python frameworks of your choice.
+
+Test environment: https://jsonplaceholder.typicode.com/guide/
+
+### Technical requirements
+
+- Python 3.11+
+- pytest
+- requests / httpx
+- pytest markers
+- Configurable base URL
+- Logging
+- HTML / Allure reporting
+
+### Architectural requirements
+
+The system must:
+
+- Support growth of the test suite.
+- Separate the API layer, assertions and test logic.
+- Avoid duplication.
+- Use reusable components.
+
+### Desirable features
+
+- API client abstraction
+- Models / DTOs
+- Fixtures
+- Parametrization
+- Negative scenarios
+- Retries / timeout handling
+- Schema validation (optional)
+
+A README is required.
+
+### Minimum required coverage
+
+Implement automated API tests for at least the following scenarios.
+
+#### Users
+
+1. Retrieve the list of users: `GET /users`.
+2. Retrieve a specific user by ID: `GET /users/{id}`.
+3. Check the response when requesting a nonexistent user: `GET /users/9999`.
+
+#### Posts
+
+4. Retrieve the list of posts: `GET /posts`.
+5. Create a new post: `POST /posts`.
+6. Update a post: `PUT /posts/{id}`.
+7. Partially update a post: `PATCH /posts/{id}`.
+8. Delete a post: `DELETE /posts/{id}`.
+
+#### Comments
+
+9. Retrieve comments for a specific post: `GET /posts/{id}/comments`.
+
+#### Negative scenarios
+
+10. Check the handling of an invalid payload, for example:
+    - Missing required fields.
+    - Incorrect data types.
+    - An empty request body.
+
+Tests must be divided into scopes (`@smoke`, `@full`, etc.). It must be possible to run
+tests by selecting a specific scope.
+
+## Implementation overview
+
 Automated tests for Users, Posts and Comments in the public
 [JSONPlaceholder API](https://jsonplaceholder.typicode.com/guide/).
 Built with Python 3.11+, pytest, requests and Pydantic, with standalone pytest-html reports.
 HTTP transport, resource methods, response validation and test scenarios have separate responsibilities.
-
-The [assignment brief](#assignment-brief) below is an English translation of the original task.
 
 ## Quick start
 
@@ -46,8 +117,11 @@ Below, `python` means the interpreter in `.venv`. Without activation, substitute
 | `python -m pytest -m full` | All API tests, including negative scenarios |
 | `python -m pytest -m negative` | Missing resources and invalid payloads |
 | `python -m pytest -m unit` | Offline component tests, including a local HTTP server |
+| `python -m pytest -m users` | User resource scenarios |
+| `python -m pytest -m posts` | Post resource scenarios, including invalid payloads and malformed JSON |
+| `python -m pytest -m comments` | Comments for a post |
 | `python -m pytest -m "full and not contract"` | API tests excluding the assumed validation contract |
-| `python -m pytest -m contract --runxfail` | Show deviations from the assumed contract as ordinary failures |
+| `python -m pytest -m contract --runxfail` | Show all 13 known deviations as ordinary failures |
 | `python -m pytest --collect-only -q` | List tests without sending requests |
 
 `smoke` is a subset of `full`. Only one parameter of each selected scenario is marked smoke;
@@ -60,19 +134,31 @@ Verified locally on Windows with Python 3.12.6 on October 19, 2026:
 
 | Scope | Result |
 | --- | --- |
-| API (`full`) | 24 passed, 12 xfailed |
-| Components (`unit`) | 45 passed |
-| Total | 81 tests: 69 passed, 12 xfailed |
+| API (`full`) | 32 passed, 13 xfailed |
+| Components (`unit`) | 54 passed |
+| Total | 99 tests: 86 passed, 13 xfailed |
+
+**There are 13 expected failures in total: 12 invalid-payload cases + 1 malformed-JSON case.
+The verified run has 0 unexpected failures.**
+
+| Known limitation | Cases | Expected response | Observed response |
+| --- | ---: | --- | --- |
+| JP-001: invalid payload accepted | 12 | HTTP 400/422 | HTTP 201 with the input fields echoed |
+| JP-004: malformed JSON parser error | 1 | HTTP 400 | HTTP 500 with the known JSON parser stack trace |
 
 The negative payload tests assume that missing fields, wrong types, empty strings and
 nonpositive user IDs should be rejected with HTTP 400/422. **This is an explicit assumption
 for the assignment, not a documented JSONPlaceholder validation guarantee.**
 
-JSONPlaceholder accepts these requests with HTTP 201. Twelve cases therefore use a narrow,
-strict `xfail`: only the verified acceptance-and-echo response is an expected failure.
-Network errors, HTTP 5xx and unexpected response bodies still fail normally. If the server
-starts rejecting a payload, `XPASS(strict)` fails the run so the expectation can be reviewed.
-See [known limitations](docs/KNOWN_LIMITATIONS.md) for the exact cases and reproduction steps.
+The 12 JP-001 cases use a narrow, strict `xfail`: only the verified HTTP 201 acceptance-and-echo
+response is an expected failure. Network errors, HTTP 5xx and unexpected response bodies
+fail normally in these cases. If the server starts rejecting a payload, `XPASS(strict)`
+fails the run so the expectation can be reviewed.
+
+The remaining 1 case (JP-004) covers malformed JSON. Its `xfail` matches only HTTP 500
+with the specific JSON parser stack trace;
+unrelated 500 responses, other statuses and network errors are not classified as expected failures.
+See [known limitations](docs/KNOWN_LIMITATIONS.md) for both cases and reproduction steps.
 
 Writes are simulated and are not persisted. Tests inspect each operation's response;
 they do not attempt to retrieve a newly created post or expect a deleted post to disappear.
@@ -80,25 +166,69 @@ Results also depend on the availability of the public service.
 
 ## Requirement coverage
 
-| Scenario | Test |
-| --- | --- |
-| `GET /users` | `test_get_users` |
-| `GET /users/{id}` | `test_get_user_by_id`, IDs 1, 5, 10 |
-| `GET /users/9999` | `test_get_nonexistent_user`, also IDs 0 and -1 |
-| `GET /posts` | `test_get_posts` |
-| `POST /posts` | `test_create_post` |
-| `PUT /posts/{id}` | `test_update_post`, IDs 1, 50, 100 |
-| `PATCH /posts/{id}` | `test_patch_post_preserves_other_fields` |
-| `DELETE /posts/{id}` | `test_delete_post` |
-| `GET /posts/{id}/comments` | `test_get_comments_for_post`, IDs 1, 50, 100 |
-| Missing required fields | `test_invalid_post_payload_is_rejected`, one case per field |
-| Wrong field types | The same test, one invalid field per case |
-| Empty strings and nonpositive user IDs | The same test, separate boundary cases |
-| Empty JSON and no request body | The same test, `empty-object` / `empty-request-body` |
+The inventory covers all technical and architectural requirements, all desirable features,
+and all ten required scenarios. The negative scenarios are implemented and executed, but the
+service does not satisfy the assumed rejection contract; their expected failures are explained
+in [Interpreting results](#interpreting-results). No required scenario is omitted or skipped without execution.
 
-Additional checks cover filtering posts by user, a missing post, an empty comments collection
-for a missing post, unique collection IDs and unchanged fields after PATCH.
-Every returned list item is validated against its response model.
+### Technical and architectural requirements
+
+| Requirement | Implementation |
+| --- | --- |
+| Python 3.11+ | `requires-python = ">=3.11"` in `pyproject.toml`; the latest local run used Python 3.12.6 |
+| pytest | Configuration in `pyproject.toml`; scenarios under `tests/` |
+| requests / httpx | `requests.Session` in `src/api_testing/client.py` |
+| pytest markers and selectable scopes | Registered `smoke`, `full`, `negative`, `unit`, `contract`, `users`, `posts`, `comments`; selection with `-m` |
+| Configurable base URL | `--base-url` / `API_BASE_URL`; CLI > environment > defaults |
+| Logging | Standard logging in the transport; file output configured in `pyproject.toml` |
+| HTML / Allure reporting | Standalone pytest-html report generated by the default test command |
+| Support a growing test suite | Resource methods, models and fixtures can be extended independently; see [Adding a scenario](#adding-a-scenario) |
+| Separate API / assertions / test logic | `src/api_testing/api.py`, `src/api_testing/assertions.py`, `tests/api/` |
+| Avoid duplication | Shared transport and assertions; parametrized scenarios rather than separate smoke copies |
+| Reusable components | Shared settings, session, resource clients, models and fixtures |
+
+`requests` and pytest-html are the chosen alternatives; using both HTTP libraries or both report
+systems is not required. The README includes installation, configuration, scope selection and reporting commands.
+
+### Desirable features
+
+| Feature | Implementation |
+| --- | --- |
+| API client abstraction | `ApiClient` handles HTTP; `UsersApi`, `PostsApi` and `CommentsApi` expose resource operations |
+| Models / DTOs | Strict Pydantic response models and a `PostPayload` request DTO; raw input remains available for negative tests |
+| Fixtures | Session and resource fixtures plus a fresh payload fixture in `tests/conftest.py`; session cleanup during teardown |
+| Parametrization | Resource IDs, POST content, PATCH fields and invalid payloads |
+| Negative scenarios | Missing resources, invalid IDs and 13 contract cases: 12 invalid payloads + 1 malformed JSON |
+| Retries / timeout handling | Configurable connect/read timeouts and bounded retries, exercised against a local HTTP server |
+| Schema validation (optional) | JSON format, API field names, nested structures and strict types; every returned list item is validated |
+
+### Minimum required scenarios
+
+| No. | Scenario | Test and key checks |
+| --- | --- | --- |
+| 1 | `GET /users` | `test_get_users`: HTTP 200, schema, nonempty list and unique IDs |
+| 2 | `GET /users/{id}` | `test_get_user_by_id`: HTTP 200, schema and matching ID; IDs 1, 5, 10 |
+| 3 | `GET /users/9999` | `test_get_nonexistent_user`: HTTP 404 and empty JSON object |
+| 4 | `GET /posts` | `test_get_posts`: HTTP 200, schema, nonempty list and unique IDs |
+| 5 | `POST /posts` | `test_create_post`: HTTP 201, schema, positive ID and all submitted fields |
+| 6 | `PUT /posts/{id}` | `test_update_post`: HTTP 200, schema, matching ID and all submitted fields |
+| 7 | `PATCH /posts/{id}` | `test_patch_post_preserves_other_fields`: HTTP 200 and the original post with only the submitted changes |
+| 8 | `DELETE /posts/{id}` | `test_delete_post`: HTTP 200 and empty JSON object |
+| 9 | `GET /posts/{id}/comments` | `test_get_comments_for_post`: HTTP 200, schema, nonempty list, matching postId and unique IDs |
+| 10 | Invalid payload handling | `test_invalid_post_payload_is_rejected`: separate missing-field and wrong-type cases, empty object and absent body; known deviations use strict xfail |
+
+### Additional coverage
+
+Beyond the minimum, the suite checks Unicode, long text and special characters in POST;
+PATCH of `title`, `body` and `userId`; user IDs 0, -1 and `abc`; filtering posts by user;
+a missing post; and an empty comments collection for a missing post.
+Empty strings and nonpositive user IDs extend the invalid-payload checks.
+Malformed JSON has its own test and documented parser failure.
+
+Every PATCH response is compared with the complete original post plus the submitted changes.
+The 54 offline component tests, lint/format checks and CI workflow are supporting checks,
+not substitutes for the 45 API scenarios. CI is configured for Python 3.11 and 3.12;
+the current inventory does not claim a new remote CI run.
 
 ## Project structure
 
@@ -128,6 +258,8 @@ Request DTOs accept Python field names such as `user_id` and serialize them as `
 Response models require API field names: `user_id` cannot replace `userId` in a server response.
 Types are strict (`"1"` and `true` are not integer IDs), while additional response fields are allowed.
 Raw dictionaries and `None` bypass DTO validation for negative requests.
+PATCH cases use explicit dictionaries containing only the field being changed.
+`PostsApi.create_raw()` sends text or bytes without JSON serialization for parser-error scenarios.
 
 The HTTP session and resource objects are shared for one test run and closed during teardown.
 Payload fixtures create a fresh DTO for each test. Tests are independent of execution order.
@@ -206,74 +338,3 @@ cover the version before the latest review changes.
 4. Parametrize similar cases. Keep reusable protocol checks in `assertions.py` and
    scenario-specific expectations with the tests.
 5. Run the affected tests and quality checks.
-
-## Assignment brief
-
-### API test automation assignment for a QA Engineer position
-
-Develop an automated API testing system using Python. You may use Python frameworks of your choice.
-
-Test environment: https://jsonplaceholder.typicode.com/guide/
-
-### Technical requirements
-
-- Python 3.11+
-- pytest
-- requests / httpx
-- pytest markers
-- Configurable base URL
-- Logging
-- HTML / Allure reporting
-
-### Architectural requirements
-
-The system must:
-
-- Support growth of the test suite.
-- Separate the API layer, assertions and test logic.
-- Avoid duplication.
-- Use reusable components.
-
-### Desirable features
-
-- API client abstraction
-- Models / DTOs
-- Fixtures
-- Parametrization
-- Negative scenarios
-- Retries / timeout handling
-- Schema validation (optional)
-
-A README is required.
-
-### Minimum required coverage
-
-Implement automated API tests for at least the following scenarios.
-
-#### Users
-
-1. Retrieve the list of users: `GET /users`.
-2. Retrieve a specific user by ID: `GET /users/{id}`.
-3. Check the response when requesting a nonexistent user: `GET /users/9999`.
-
-#### Posts
-
-4. Retrieve the list of posts: `GET /posts`.
-5. Create a new post: `POST /posts`.
-6. Update a post: `PUT /posts/{id}`.
-7. Partially update a post: `PATCH /posts/{id}`.
-8. Delete a post: `DELETE /posts/{id}`.
-
-#### Comments
-
-9. Retrieve comments for a specific post: `GET /posts/{id}/comments`.
-
-#### Negative scenarios
-
-10. Check the handling of an invalid payload, for example:
-    - Missing required fields.
-    - Incorrect data types.
-    - An empty request body.
-
-Tests must be divided into scopes (`@smoke`, `@full`, etc.). It must be possible to run
-tests by selecting a specific scope.

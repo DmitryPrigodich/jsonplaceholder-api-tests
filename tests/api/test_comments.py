@@ -4,7 +4,7 @@ from api_testing.api import CommentsApi
 from api_testing.assertions import assert_json, assert_model_list, assert_status
 from api_testing.models import Comment
 
-pytestmark = pytest.mark.full
+pytestmark = [pytest.mark.full, pytest.mark.comments]
 
 
 @pytest.mark.parametrize("post_id", [pytest.param(1, marks=pytest.mark.smoke), 50, 100])

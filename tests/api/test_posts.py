@@ -7,9 +7,9 @@ from api_testing.assertions import (
     assert_model_list,
     assert_status,
 )
-from api_testing.models import Post, PostPatch, PostPayload
+from api_testing.models import Post, PostPayload
 
-pytestmark = pytest.mark.full
+pytestmark = [pytest.mark.full, pytest.mark.posts]
 
 
 @pytest.mark.smoke
@@ -33,8 +33,18 @@ def test_filter_posts_by_user(posts_api: PostsApi, user_id: int) -> None:
     assert all(post.user_id == user_id for post in posts)
 
 
-@pytest.mark.smoke
-def test_create_post(posts_api: PostsApi, post_payload: PostPayload) -> None:
+@pytest.mark.parametrize(
+    ("title", "body"),
+    [
+        pytest.param("Test title", "Test body", id="basic", marks=pytest.mark.smoke),
+        pytest.param("Café 🚀", "Résumé — こんにちは 🌍", id="unicode"),
+        pytest.param("x" * 500, "y" * 2000, id="long-text"),
+        pytest.param('<b>spec</b> & "quotes"', "line1\nline2\tend\\path", id="special-characters"),
+    ],
+)
+def test_create_post(posts_api: PostsApi, title: str, body: str) -> None:
+    post_payload = PostPayload(user_id=1, title=title, body=body)
+
     response = posts_api.create(post_payload)
 
     assert_status(response, 201)
@@ -57,20 +67,27 @@ def test_update_post(posts_api: PostsApi, post_payload: PostPayload, post_id: in
 
 
 @pytest.mark.parametrize("post_id", [1, 100])
-def test_patch_post_preserves_other_fields(posts_api: PostsApi, post_id: int) -> None:
+@pytest.mark.parametrize(
+    "patch",
+    [
+        pytest.param({"title": "Updated title only"}, id="title"),
+        pytest.param({"body": "Updated body only"}, id="body"),
+        pytest.param({"userId": 7}, id="user-id"),
+    ],
+)
+def test_patch_post_preserves_other_fields(
+    posts_api: PostsApi, post_id: int, patch: dict[str, str | int]
+) -> None:
     original_response = posts_api.get(post_id)
     assert_status(original_response, 200)
     original = assert_model(original_response, Post)
-    patch = PostPatch(title="Updated title only")
 
     response = posts_api.patch(post_id, patch)
 
     assert_status(response, 200)
     post = assert_model(response, Post)
-    assert post.title == patch.title
-    assert post.id == original.id
-    assert post.user_id == original.user_id
-    assert post.body == original.body
+    expected = original.model_dump(by_alias=True) | patch
+    assert post.model_dump(by_alias=True) == expected
 
 
 @pytest.mark.parametrize("post_id", [1, 100])

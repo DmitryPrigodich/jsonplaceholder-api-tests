@@ -71,7 +71,7 @@ raises `KnownPayloadValidationGap`.
 This avoids hiding arbitrary failures behind `xfail`. To display the deviations as ordinary failures:
 
 ```bash
-python -m pytest -m contract --runxfail
+python -m pytest -m contract -k invalid_post_payload --runxfail
 ```
 
 On the current service, expect twelve failures and a nonzero exit code.
@@ -103,3 +103,51 @@ HTTP 200 with an empty array. These are distinct scenarios with separate tests.
 Changing the base URL changes request destinations, not the API contract or data expectations.
 Offline component tests (`-m unit`) do not contact the public service; transport tests use
 a temporary local HTTP server.
+
+## JP-004: Malformed JSON causes a server error
+
+Unlike the valid JSON objects in JP-001, this request cannot be parsed as JSON at all:
+
+```http
+POST /posts HTTP/1.1
+Host: jsonplaceholder.typicode.com
+Content-Type: application/json
+
+{not a json
+```
+
+The test expects HTTP 400 for a malformed request. The observed response is HTTP 500,
+with a stack trace beginning with:
+
+```text
+SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse (/app/node_modules/body-parser/lib/types/json.js:89:19)
+```
+
+`test_malformed_json_is_rejected` sends the exact text through `PostsApi.create_raw()`.
+The body is not JSON-encoded into a valid string, and the POST is not retried after HTTP 500.
+An offline transport test verifies both behaviors.
+
+The test uses `xfail(strict=True, raises=KnownMalformedJsonError)`. Only HTTP 500 with
+the observed syntax-error prefix and both `JSON.parse` and `body-parser` stack entries
+is classified as this known failure. Generic 500 responses, different parser failures,
+other statuses and transport errors remain ordinary failures. Local tests verify that
+the classification does not hide these unrelated problems.
+
+HTTP 500 is not an accepted success status. It remains a documented server error.
+If the service starts returning HTTP 400, `XPASS(strict)` requires the marker to be reviewed.
+
+To demonstrate this failure without xfail handling:
+
+```bash
+python -m pytest -m contract -k malformed_json --runxfail
+```
+
+To demonstrate all known validation deviations, including JP-001:
+
+```bash
+python -m pytest -m contract --runxfail
+```
+
+The latter command currently produces thirteen failures and a nonzero exit code.

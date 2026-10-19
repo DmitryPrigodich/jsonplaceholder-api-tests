@@ -58,10 +58,6 @@ class Post(ResponseModel):
     body: str
 
 
-class PostPatch(RequestModel):
-    title: str = Field(min_length=1)
-
-
 class Comment(ResponseModel):
     post_id: PositiveInt = Field(alias="postId")
     id: PositiveInt

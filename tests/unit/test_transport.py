@@ -80,3 +80,17 @@ def test_payload_dto_raw_invalid_data_and_absent_body_reach_server(local_server)
     }
     assert json.loads(local_server.requests[1]["body"]) == {"userId": "wrong", "title": False}
     assert local_server.requests[2]["body"] == b""
+
+
+def test_malformed_json_reaches_server_without_encoding_or_retry(local_server) -> None:
+    local_server.statuses = [500, 200]
+    with ApiClient(Settings(base_url=local_server.url, retries=2)) as client:
+        response = PostsApi(client).create_raw("{not a json")
+
+    assert response.status_code == 500
+    assert len(local_server.requests) == 1
+    request = local_server.requests[0]
+    assert request["method"] == "POST"
+    assert request["path"] == "/posts"
+    assert request["headers"]["Content-Type"] == "application/json"
+    assert request["body"] == b"{not a json"

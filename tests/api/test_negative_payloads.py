@@ -3,9 +3,14 @@ from typing import Any
 import pytest
 
 from api_testing.api import PostsApi
-from tests.api.payload_validation import KnownPayloadValidationGap, assert_invalid_payload_rejected
+from tests.api.payload_validation import (
+    KnownMalformedJsonError,
+    KnownPayloadValidationGap,
+    assert_invalid_payload_rejected,
+    assert_malformed_json_rejected,
+)
 
-pytestmark = [pytest.mark.full, pytest.mark.negative, pytest.mark.contract]
+pytestmark = [pytest.mark.full, pytest.mark.negative, pytest.mark.contract, pytest.mark.posts]
 
 INVALID_PAYLOADS = [
     pytest.param({"body": "Body", "userId": 1}, id="missing-title"),
@@ -35,3 +40,14 @@ def test_invalid_post_payload_is_rejected(
     response = posts_api.create(payload)
 
     assert_invalid_payload_rejected(response, payload)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=KnownMalformedJsonError,
+    reason="JP-004: malformed JSON causes HTTP 500; see docs/KNOWN_LIMITATIONS.md",
+)
+def test_malformed_json_is_rejected(posts_api: PostsApi) -> None:
+    response = posts_api.create_raw("{not a json")
+
+    assert_malformed_json_rejected(response)
